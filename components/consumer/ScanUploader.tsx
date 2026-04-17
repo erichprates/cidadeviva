@@ -29,8 +29,8 @@ interface ResultPayload {
   achievements?: AchievementUnlock[];
 }
 
-const MAX_DIMENSION = 900;
-const JPEG_QUALITY = 0.75;
+const MAX_DIMENSION = 1200;
+const JPEG_QUALITY = 0.82;
 
 async function loadImageSource(file: File): Promise<ImageBitmap | HTMLImageElement | null> {
   const bitmap = await createImageBitmap(file).catch(() => null);
