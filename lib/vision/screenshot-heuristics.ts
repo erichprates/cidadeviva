@@ -57,7 +57,7 @@ export async function analyzeImageOrigin(buffer: Buffer): Promise<ScreenshotVerd
       exif: true,
       gps: false,
       pick: ['Make', 'Model', 'DateTimeOriginal', 'CreateDate', 'ImageWidth', 'ImageHeight', 'ExifImageWidth', 'ExifImageHeight'],
-    });
+    } as never);
   } catch {
     parsed = null;
   }
