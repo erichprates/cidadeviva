@@ -2,6 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const VISION_MODEL = 'claude-sonnet-4-20250514';
 
+export class VisionServiceError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'VisionServiceError';
+  }
+}
+
 export interface VisionResult {
   cnpj: string | null;
   merchant_name: string | null;
@@ -23,12 +30,18 @@ TIPOS DE DOCUMENTO QUE VOCÊ VAI ENCONTRAR:
 4. Recibo manual ou impresso
 5. Comprovante PIX emitido pela maquininha (diferente do comprovante bancário do app)
 
-REGRAS PARA ENCONTRAR O CNPJ:
-- O CNPJ brasileiro tem formato XX.XXX.XXX/XXXX-XX (18 caracteres com pontuação)
-- Em cupons de maquininha: aparece SOZINHO em uma linha, logo abaixo do nome do estabelecimento, SEM label "CNPJ:"
+REGRA CRÍTICA PARA CNPJ:
+O CNPJ brasileiro tem SEMPRE o formato XX.XXX.XXX/XXXX-XX (com pontos, barra e traço).
+Em cupons de maquininha Getnet, Cielo, Stone e similares, o CNPJ aparece
+SOZINHO em uma linha logo abaixo do nome do estabelecimento, SEM nenhum label.
+Exemplo exato de como aparece: 52.101.403/0001-20
+Procure por qualquer sequência de 18 caracteres nesse padrão em toda a imagem.
+NUNCA confunda com: EC:, CV:, DOC:, AUT:, TERM:, AID:, ARQC: — esses são códigos internos.
+Se encontrar o padrão XX.XXX.XXX/XXXX-XX em qualquer parte da imagem, esse é o CNPJ.
+
+REGRAS ADICIONAIS PARA ENCONTRAR O CNPJ:
 - Em notas fiscais: pode aparecer como "CNPJ: XX.XXX.XXX/XXXX-XX" no cabeçalho
 - Em comprovantes PIX da maquininha: aparece na seção "Dados do Estabelecimento"
-- NUNCA confunda com EC:, DOC:, AUT:, TERM:, CV:, AID:, ARQC: — esses são códigos internos da transação
 - O CNPJ sempre tem a barra / no meio: XXXX/XXXX
 
 REGRAS PARA ENCONTRAR O VALOR TOTAL:
@@ -111,7 +124,7 @@ export async function extractReceipt(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return mockResult();
 
-  const client = new Anthropic({ apiKey, timeout: 30_000 });
+  const client = new Anthropic({ apiKey, timeout: 25_000 });
 
   try {
     const response = await client.messages.create({
@@ -156,6 +169,6 @@ export async function extractReceipt(
     if (/could not process image|image/i.test(raw)) {
       return failResult('Não conseguimos ler essa imagem. Envie uma foto mais nítida e bem iluminada.');
     }
-    return failResult('Erro temporário na análise. Tente novamente em instantes.');
+    throw new VisionServiceError(raw, err);
   }
 }

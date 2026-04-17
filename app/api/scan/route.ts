@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { extractReceipt } from '@/lib/vision/extract-receipt';
+import { extractReceipt, VisionServiceError } from '@/lib/vision/extract-receipt';
 import { analyzeImageOrigin } from '@/lib/vision/screenshot-heuristics';
 import { decideReceipt } from '@/lib/credits/calculator';
 import { fuzzyMatchCnpj } from '@/lib/credits/merchant-match';
@@ -96,7 +96,19 @@ export async function POST(request: Request) {
     console.log('[scan] origin:', origin, 'live_capture:', liveCapture);
 
     const base64 = buffer.toString('base64');
-    const vision = await extractReceipt(base64, mediaType);
+    let vision;
+    try {
+      vision = await extractReceipt(base64, mediaType);
+    } catch (err) {
+      if (err instanceof VisionServiceError) {
+        console.error('[scan] vision service unavailable:', err.message);
+        return NextResponse.json(
+          { error: 'Serviço temporariamente indisponível. Tente novamente em instantes.', code: 'vision_unavailable' },
+          { status: 503 },
+        );
+      }
+      throw err;
+    }
 
     if (!liveCapture && origin.likelyScreenshot && !vision.is_suspicious) {
       vision.is_suspicious = true;
