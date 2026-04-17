@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cv-green: #1B7A4A;
+  --cv-lime: #8DC63F;
+  --cv-earth: #3D2B1F;
+  --cv-sand: #F5F0E8;
+  --cv-gold: #E8A020;
+  --cv-white: #FEFCF8;
+}
+
+html, body {
+  background-color: var(--cv-sand);
+  color: var(--cv-earth);
+}
+
+body {
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; color: black; }
+  main { max-width: none !important; padding: 0 !important; }
+}
