@@ -21,66 +21,22 @@ export interface VisionResult {
   raw?: unknown;
 }
 
-const VISION_PROMPT = `Você é um especialista em leitura de comprovantes fiscais brasileiros. Analise esta imagem e extraia os dados em JSON.
+const VISION_PROMPT = `Extraia dados deste comprovante fiscal brasileiro em JSON.
 
-TIPOS DE DOCUMENTO QUE VOCÊ VAI ENCONTRAR:
-1. Cupom de maquininha (Getnet, Cielo, Stone, Rede, PagSeguro)
-2. Cupom fiscal de PDV (impressora térmica de caixa)
-3. Nota fiscal impressa
-4. Recibo manual ou impresso
-5. Comprovante PIX emitido pela maquininha (diferente do comprovante bancário do app)
+CNPJ (crítico): formato XX.XXX.XXX/XXXX-XX (18 caracteres com pontos, barra e traço).
+Em cupons de maquininha (Getnet, Cielo, Stone) aparece SOZINHO numa linha abaixo do nome do lojista, SEM label. Ex: 52.101.403/0001-20.
+NUNCA confunda com EC:, CV:, DOC:, AUT:, TERM:, AID:, ARQC: — códigos internos.
 
-REGRA CRÍTICA PARA CNPJ:
-O CNPJ brasileiro tem SEMPRE o formato XX.XXX.XXX/XXXX-XX (com pontos, barra e traço).
-Em cupons de maquininha Getnet, Cielo, Stone e similares, o CNPJ aparece
-SOZINHO em uma linha logo abaixo do nome do estabelecimento, SEM nenhum label.
-Exemplo exato de como aparece: 52.101.403/0001-20
-Procure por qualquer sequência de 18 caracteres nesse padrão em toda a imagem.
-NUNCA confunda com: EC:, CV:, DOC:, AUT:, TERM:, AID:, ARQC: — esses são códigos internos.
-Se encontrar o padrão XX.XXX.XXX/XXXX-XX em qualquer parte da imagem, esse é o CNPJ.
+VALOR TOTAL: procure "VALOR: R$", "TOTAL R$", "DÉBITO R$", "CRÉDITO R$". É o total pago, não parcial/taxa/troco. Retorne número puro (ex: 49.00).
 
-REGRAS ADICIONAIS PARA ENCONTRAR O CNPJ:
-- Em notas fiscais: pode aparecer como "CNPJ: XX.XXX.XXX/XXXX-XX" no cabeçalho
-- Em comprovantes PIX da maquininha: aparece na seção "Dados do Estabelecimento"
-- O CNPJ sempre tem a barra / no meio: XXXX/XXXX
+DATA: converta DD/MM/AA para YYYY-MM-DD.
 
-REGRAS PARA ENCONTRAR O VALOR TOTAL:
-- Em cupons de maquininha procure por: "VALOR: R$", "DÉBITO R$", "CRÉDITO R$", "Valor R$", "TOTAL R$"
-- O valor fica geralmente no final do cupom ou dentro de uma caixa/retângulo
-- Em cupons com "DÉBITO A VISTA" o valor está na linha VALOR: R$
-- Ignore valores parciais, taxas, troco — pegue sempre o TOTAL PAGO
-- Formato: número sem R$ e sem pontos de milhar (ex: 49.00, 22.50)
+document_type: "cupom_maquininha" | "cupom_fiscal" | "nf" | "recibo" | "pix_bancario" (app do banco — rejeitar) | "outro".
 
-REGRAS PARA ENCONTRAR A DATA:
-- Em cupons de maquininha: formato DD/MM/AA HH:MM:SS (ex: 02/04/26 18:33:25)
-- Converta sempre para YYYY-MM-DD (ex: 2026-04-02)
-- A data fica geralmente na linha após o CNPJ ou no cabeçalho ao lado de "Via Estab"
+is_suspicious: true APENAS se for screenshot de tela (barra de status, ícones de bateria/wifi) ou imagem editada. Foto real com qualidade ruim NÃO é suspeita.
 
-SOBRE is_suspicious:
-- NÃO marque como suspeito por: papel amassado, dedo na foto, foto torta, má iluminação, borrão
-- MARQUE como suspeito APENAS se: claramente é screenshot de tela de celular/computador (barra de status visível, ícones de bateria/wifi, interface de app), ou se a imagem parecer editada digitalmente
-- Comprovante de maquininha PIX (Getnet, Cielo etc com seção "Dados do Estabelecimento") é VÁLIDO — não é o mesmo que comprovante bancário do Nubank/Inter
-- Foto tirada de um comprovante real, mesmo com qualidade ruim, NÃO é suspeita
-
-SOBRE document_type:
-- "cupom_maquininha": comprovante de cartão/PIX emitido pela maquininha (Getnet, Cielo, Stone etc)
-- "cupom_fiscal": cupom fiscal de caixa registradora/PDV
-- "nf": nota fiscal impressa com chave de acesso
-- "recibo": recibo simples impresso ou manuscrito
-- "pix_bancario": comprovante gerado pelo app do banco (Nubank, Inter, BB etc) — REJEITAR
-- "outro": qualquer outro tipo
-
-Retorne APENAS JSON válido sem texto adicional:
-{
-  "cnpj": "XX.XXX.XXX/XXXX-XX ou null",
-  "merchant_name": "nome do estabelecimento ou null",
-  "total_amount": 0.00,
-  "purchase_date": "YYYY-MM-DD ou null",
-  "document_type": "cupom_maquininha | cupom_fiscal | nf | recibo | pix_bancario | outro",
-  "confidence": 0.95,
-  "is_suspicious": false,
-  "suspicion_reason": null
-}`;
+Retorne APENAS JSON:
+{"cnpj":"XX.XXX.XXX/XXXX-XX ou null","merchant_name":"nome ou null","total_amount":0.00,"purchase_date":"YYYY-MM-DD ou null","document_type":"...","confidence":0.95,"is_suspicious":false,"suspicion_reason":null}`;
 
 function failResult(reason: string): VisionResult {
   return {
@@ -124,12 +80,12 @@ export async function extractReceipt(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return mockResult();
 
-  const client = new Anthropic({ apiKey, timeout: 25_000 });
+  const client = new Anthropic({ apiKey, timeout: 9_000 });
 
   try {
     const response = await client.messages.create({
       model: VISION_MODEL,
-      max_tokens: 500,
+      max_tokens: 300,
       messages: [
         {
           role: 'user',
